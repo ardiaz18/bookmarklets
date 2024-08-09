@@ -1,0 +1,74 @@
+//Bookmarklet para scrapear los resultados de la serp (1a pag) en un vistazo. Minificar antes de copypaste en marcadores.
+
+javascript: (function () {
+    var results = document.querySelectorAll("div.g");
+    var output = "<div id='resultsContainer' style='position: fixed; top: 5%; left: 5%; width: 90%; height: 85%; z-index: 9999; overflow: auto; background: white; border: 2px solid black; padding: 20px;'>";
+    output += "<button id='closeButton' style='position: absolute; top: 10px; right: 20px; padding: 5px 10px; background: red; color: white; border: none; cursor: pointer;'>X</button>";
+    output += "<button id='copyButton' style='position: absolute; top: 10px; left: 20px; padding: 5px 10px; background: blue; color: white; border: none; cursor: pointer;'>Copy</button>";
+    output += "<table id='resultsTable' style='width:100%; border-collapse: collapse; margin-top: 50px; color: black;'><tr><th>#</th><th>Title</th><th>URL</th><th>Additional Info</th></tr>";
+    results.forEach(function (result, index) {
+        var titleElement = result.querySelector("h3");
+        var linkElement = result.querySelector("a");
+        var url = linkElement.href;
+        var additionalInfo = getAdditionalInfo(result);
+        if (titleElement && linkElement) {
+            output += `<tr style='border: 1px solid black; padding: 5px;'>`;
+            output += `<td style='border: 1px solid black; padding: 5px; white-space: nowrap;'>${index + 1}</td>`;
+            output += `<td style='border: 1px solid black; padding: 5px; white-space: nowrap;'>${titleElement.innerText}</td>`;
+            output += `<td style='border: 1px solid black; padding: 5px; white-space: nowrap;'><a href='${url}' target='_blank' style='color: darkblue;'>${url}</a></td>`;
+            output += `<td style='border: 1px solid black; padding: 5px; white-space: nowrap;'>${additionalInfo}</td></tr>`;
+        }
+    });
+    output += "</table>";
+    output +=
+        "<div style='text-align: center; margin-top: 20px; color: #333;'><small>Desarrollado por <a href='https://linkedin.com/in/aliciaruiz20/' target='_blank' style='color: darkblue;'>Alicia Ruiz</a> con la inestimable ayuda de ChatGPT</small></div>";
+    output += "</div>";
+    document.body.insertAdjacentHTML("beforeend", output);
+    document.getElementById("closeButton").onclick = function () {
+        var container = document.getElementById("resultsContainer");
+        container.parentNode.removeChild(container);
+    };
+    document.getElementById("copyButton").onclick = function () {
+        var el = document.createElement("textarea");
+        var rows = document.querySelectorAll("#resultsTable tr");
+        var textToCopy = Array.from(rows)
+            .map((row) =>
+                Array.from(row.querySelectorAll("th, td"))
+                    .map((cell) => cell.innerText.replace(/[\u200B-\u200D\uFEFF]/g, ""))
+                    .join("\t")
+            )
+            .join("\n");
+        document.body.appendChild(el);
+        el.value = textToCopy;
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+        alert("Tabla copiada al portapapeles");
+    };
+    function getAdditionalInfo(result) {
+        var info = [];
+        if (result.closest(".related-question-pair")) {
+            info.push("Módulo 'Más preguntas'");
+        }
+        var images = result.querySelectorAll("img");
+        if (images.length > 1) {
+            info.push("Incluye más de 1 imagen");
+        } else if (images.length === 1) {
+            info.push("Incluye 1 imagen");
+        }
+        if (result.querySelector("g-video") || result.querySelector("video")) {
+            info.push("Incluye video");
+        }
+        if (result.querySelector("table")) {
+            info.push("Formato tabla");
+        } else if (result.querySelector("ul") || result.querySelector("ol")) {
+            info.push("Formato lista");
+        }
+        if (result.querySelector(".rich-snippet") || result.querySelector(".structured-snippet") || result.querySelector("[data-attrid]")) {
+            info.push("Resultado enriquecido");
+        }
+        return info.length > 0 ? info.join(", ") : "Resultado estándar";
+    }
+})();
+
+//Por momentos no funciona y estoy tratando de averiguar por qué. ¿Es un tema de cookies o privacidad? ¿alguna extensión que esté bloqueando el JS?
