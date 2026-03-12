@@ -1,2 +1,339 @@
 // Cuenta y señala las veces que una kw aparece en un texto.
-javascript:(function(){var keyword=prompt("Introduce la palabra clave a buscar:");if(!keyword)return;var count=0;function highlightText(node){if(node.nodeType===3){var text=node.nodeValue;var keywordRegex=new RegExp(`(${keyword})`,'gi');var matches=text.match(keywordRegex);if(matches){count+=matches.length;var newText=text.replace(keywordRegex,'<span style="background-color: yellow;">$1</span>');var span=document.createElement('span');span.innerHTML=newText;node.parentNode.replaceChild(span,node)}}else if(node.nodeType===1&&node.childNodes&&!/(script|style)/i.test(node.tagName)){for(var i=0;i<node.childNodes.length;i++){highlightText(node.childNodes[i])}}}highlightText(document.body);var modal=document.createElement('div');modal.style.position='fixed';modal.style.top='50%';modal.style.left='50%';modal.style.transform='translate(-50%, -50%)';modal.style.backgroundColor='white';modal.style.padding='20px';modal.style.boxShadow='0 0 10px rgba(0, 0, 0, 0.5)';modal.style.zIndex='10000';modal.style.textAlign='center';modal.style.fontFamily='Arial, sans-serif';var modalContent=`<p>La palabra clave "<strong>${keyword}</strong>" aparece <strong>${count}</strong> veces en esta página.</p>`;modalContent+=`<p style="font-size: 12px; color: #555;">Desarrollado por <a href="https://linkedin.com/in/aliciaruiz20/" target="_blank" style="color: #0073b1;">Alicia Ruiz</a> con la inestimable ayuda de ChatGPT</p>%60;modal.innerHTML=modalContent;var closeButton=document.createElement('button');closeButton.innerText='Cerrar';closeButton.style.marginTop='10px';closeButton.style.padding='5px 10px';closeButton.style.backgroundColor='#0073b1';closeButton.style.color='white';closeButton.style.border='none';closeButton.style.cursor='pointer';closeButton.onclick=function(){document.body.removeChild(modal)};modal.appendChild(closeButton);document.body.appendChild(modal)})()
+javascript:(function(){
+  try {
+    function normalizeText(str){
+      return (str || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^\p{L}\p{N}\s/-]/gu,' ')
+        .replace(/[-_/]+/g,' ')
+        .replace(/\s+/g,' ')
+        .trim();
+    }
+
+    function tokenize(str){
+      var stop = new Set([
+        'de','la','que','el','en','y','a','los','del','se','las','por','un','para','con',
+        'no','una','su','al','lo','como','mas','pero','sus','le','ya','o','este','si',
+        'porque','esta','entre','cuando','muy','sin','sobre','tambien','me','hasta','hay',
+        'donde','quien','desde','todo','nos','durante','todos','uno','les','ni','contra',
+        'otros','ese','eso','ante','ellos','e','esto','mi','tu','te','ti','es','son',
+        'fue','era','ser','ha','han','he','haber','está','estoy','estar','solo',
+        'tras','cada','cual','cuales','cualquier','todo','toda','todas','todos','más',
+        'menos','muy','ya','aqui','alli','aún','aun','ademas','además','tan','tal',
+        'the','and','for','with','from','your','you','our'
+      ]);
+      return normalizeText(str)
+        .split(/\s+/)
+        .filter(function(w){
+          return w && w.length > 2 && !stop.has(w);
+        });
+    }
+
+    function extractNgrams(words, minN, maxN){
+      var out = [];
+      for(var n=minN; n<=maxN; n++){
+        for(var i=0; i<=words.length-n; i++){
+          var gram = words.slice(i, i+n).join(' ');
+          if(gram.split(' ').length === n){
+            out.push(gram);
+          }
+        }
+      }
+      return out;
+    }
+
+    function addScore(map, phrase, score, source){
+      phrase = normalizeText(phrase);
+      if(!phrase) return;
+      var wc = phrase.split(/\s+/).filter(Boolean).length;
+      if(wc < 1 || wc > 5) return;
+      if(!map[phrase]) map[phrase] = {score:0, sources:{}};
+      map[phrase].score += score;
+      map[phrase].sources[source] = (map[phrase].sources[source] || 0) + score;
+    }
+
+    function addFromText(map, text, baseScore, source, minN, maxN){
+      var words = tokenize(text);
+      var grams = extractNgrams(words, minN, maxN);
+      var local = {};
+      grams.forEach(function(g){
+        local[g] = (local[g] || 0) + 1;
+      });
+      Object.keys(local).forEach(function(g){
+        var freqBoost = Math.min(local[g], 6);
+        addScore(map, g, baseScore * freqBoost, source);
+      });
+    }
+
+    function getSlugPhrases(){
+      var path = location.pathname || '';
+      path = decodeURIComponent(path);
+      var chunks = path.split('/').filter(Boolean);
+      var last = chunks.length ? chunks[chunks.length-1] : '';
+      last = normalizeText(last.replace(/\.[a-z0-9]+$/i,''));
+      var words = tokenize(last);
+      var phrases = [];
+      if(words.length){
+        for(var n=Math.min(4, words.length); n>=1; n--){
+          for(var i=0; i<=words.length-n; i++){
+            phrases.push(words.slice(i, i+n).join(' '));
+          }
+        }
+      }
+      return phrases;
+    }
+
+    function sameUrl(href){
+      try{
+        var u = new URL(href, location.href);
+        var a = u.origin + u.pathname.replace(/\/+$/,'');
+        var b = location.origin + location.pathname.replace(/\/+$/,'');
+        return a === b;
+      }catch(e){
+        return false;
+      }
+    }
+
+    function getVisibleBreadcrumbs(){
+      var selectors = [
+        '[aria-label*="breadcrumb" i]',
+        '[class*="breadcrumb" i]',
+        '[id*="breadcrumb" i]',
+        '.breadcrumbs',
+        '.yoast-breadcrumb',
+        'nav[aria-label*="miga" i]',
+        'nav[aria-label*="breadcrumb" i]'
+      ];
+      var items = [];
+      selectors.forEach(function(sel){
+        document.querySelectorAll(sel).forEach(function(node){
+          var txt = normalizeText(node.innerText || node.textContent || '');
+          if(txt && txt.length < 300) items.push(txt);
+        });
+      });
+      return items;
+    }
+
+    function getSchemaTexts(){
+      var out = [];
+      document.querySelectorAll('script[type="application/ld+json"]').forEach(function(s){
+        try{
+          var data = JSON.parse(s.textContent);
+          var arr = Array.isArray(data) ? data : [data];
+
+          function walk(obj){
+            if(!obj || typeof obj !== 'object') return;
+
+            if(obj['@type']){
+              var t = Array.isArray(obj['@type']) ? obj['@type'].join(' ') : obj['@type'];
+              t = String(t).toLowerCase();
+
+              if(t.includes('breadcrumblist') && Array.isArray(obj.itemListElement)){
+                obj.itemListElement.forEach(function(el){
+                  if(el && el.name) out.push(String(el.name));
+                  if(el && el.item && el.item.name) out.push(String(el.item.name));
+                });
+              }
+
+              if(
+                t.includes('webpage') ||
+                t.includes('article') ||
+                t.includes('product') ||
+                t.includes('service')
+              ){
+                if(obj.name) out.push(String(obj.name));
+                if(obj.headline) out.push(String(obj.headline));
+                if(obj.alternativeHeadline) out.push(String(obj.alternativeHeadline));
+              }
+            }
+
+            Object.keys(obj).forEach(function(k){
+              walk(obj[k]);
+            });
+          }
+
+          arr.forEach(walk);
+        }catch(e){}
+      });
+      return out;
+    }
+
+    function getInternalAnchorsToSelf(){
+      var texts = [];
+      document.querySelectorAll('a[href]').forEach(function(a){
+        var href = a.getAttribute('href');
+        if(href && sameUrl(href)){
+          var txt = normalizeText(a.innerText || a.textContent || a.getAttribute('title') || '');
+          if(txt) texts.push(txt);
+        }
+      });
+      return texts;
+    }
+
+    function unique(arr){
+      return Array.from(new Set(arr.filter(Boolean)));
+    }
+
+    var scores = {};
+
+    var pageTitle = document.title || '';
+    var h1s = Array.from(document.querySelectorAll('h1')).map(function(h){ return h.innerText || h.textContent || ''; });
+    var mainText = Array.from(document.querySelectorAll('main p, article p, p')).map(function(p){ return p.innerText || p.textContent || ''; }).join(' ');
+    var slugPhrases = getSlugPhrases();
+    var selfAnchors = getInternalAnchorsToSelf();
+    var breadcrumbTexts = getVisibleBreadcrumbs();
+    var schemaTexts = getSchemaTexts();
+
+    addFromText(scores, pageTitle, 12, 'title', 2, 4);
+    addFromText(scores, pageTitle, 6, 'title_unigram', 1, 1);
+
+    h1s.forEach(function(h1){
+      addFromText(scores, h1, 14, 'h1', 2, 4);
+      addFromText(scores, h1, 7, 'h1_unigram', 1, 1);
+    });
+
+    slugPhrases.forEach(function(p){
+      var wc = p.split(' ').length;
+      var weight = wc >= 3 ? 16 : wc === 2 ? 14 : 6;
+      addScore(scores, p, weight, 'slug');
+    });
+
+    addFromText(scores, mainText, 1.6, 'content', 2, 3);
+
+    selfAnchors.forEach(function(t){
+      addFromText(scores, t, 7, 'anchors_to_self', 1, 4);
+    });
+
+    breadcrumbTexts.forEach(function(t){
+      addFromText(scores, t, 4, 'breadcrumbs_visible', 1, 4);
+    });
+
+    schemaTexts.forEach(function(t){
+      addFromText(scores, t, 5, 'schema', 1, 4);
+    });
+
+    var candidates = Object.keys(scores)
+      .filter(function(k){
+        var wc = k.split(' ').length;
+        if(wc < 2 || wc > 4) return false;
+        if(k.length < 5) return false;
+        return true;
+      })
+      .map(function(k){
+        return {phrase:k, score:scores[k].score, sources:scores[k].sources};
+      })
+      .sort(function(a,b){ return b.score - a.score; });
+
+    function overlap(a,b){
+      var sa = new Set(a.split(' '));
+      var sb = new Set(b.split(' '));
+      var common = 0;
+      sa.forEach(function(w){ if(sb.has(w)) common++; });
+      return common;
+    }
+
+    var primary = candidates[0] ? candidates[0].phrase : '';
+    if(!primary){
+      alert('No he podido inferir una keyword objetivo clara en esta página.');
+      return;
+    }
+
+    var variants = candidates
+      .filter(function(c){
+        if(c.phrase === primary) return false;
+        return overlap(primary, c.phrase) >= 1;
+      })
+      .filter(function(c){
+        return c.sources.content || c.sources.title || c.sources.h1 || c.sources.slug || c.sources.anchors_to_self || c.sources.schema || c.sources.breadcrumbs_visible;
+      })
+      .slice(0, 12)
+      .map(function(c){ return c.phrase; });
+
+    variants = unique(variants);
+
+    var confidence = 'media';
+    var p = scores[primary] ? scores[primary].sources : {};
+    var strongSignals = 0;
+    ['title','h1','slug','anchors_to_self','schema','breadcrumbs_visible'].forEach(function(s){
+      if(p[s]) strongSignals++;
+    });
+    if(strongSignals >= 3) confidence = 'alta';
+    if(strongSignals <= 1) confidence = 'baja';
+
+    var details = [];
+    details.push('La kw objetivo más probable y su variabilidad semántica es:');
+    details.push('');
+    details.push('KW objetivo probable: ' + primary);
+    details.push('Confianza: ' + confidence);
+    details.push('');
+    details.push('Variabilidad semántica detectada:');
+    if(variants.length){
+      variants.forEach(function(v){ details.push('- ' + v); });
+    } else {
+      details.push('- No he detectado variantes claras');
+    }
+
+    details.push('');
+    details.push('Señales principales usadas:');
+    details.push('- Title: ' + normalizeText(pageTitle).slice(0,120));
+    details.push('- H1: ' + (h1s[0] ? normalizeText(h1s[0]).slice(0,120) : 'no encontrado'));
+    details.push('- Slug: ' + normalizeText(location.pathname));
+    details.push('- Anchors internos hacia esta URL: ' + selfAnchors.length);
+    details.push('- Breadcrumbs visibles: ' + breadcrumbTexts.length);
+    details.push('- Textos schema útiles: ' + schemaTexts.length);
+
+    var oldBox = document.getElementById('seo-kw-inference-box');
+    if (oldBox) oldBox.remove();
+
+    var box = document.createElement('div');
+    box.id = 'seo-kw-inference-box';
+    box.style.position = 'fixed';
+    box.style.top = '20px';
+    box.style.right = '20px';
+    box.style.width = '420px';
+    box.style.height = '520px';
+    box.style.background = '#111';
+    box.style.color = '#fff';
+    box.style.padding = '15px';
+    box.style.zIndex = '999999';
+    box.style.borderRadius = '8px';
+    box.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
+    box.style.fontFamily = 'monospace';
+    box.style.display = 'flex';
+    box.style.flexDirection = 'column';
+    box.style.gap = '10px';
+
+    var close = document.createElement('div');
+    close.innerText = '✕';
+    close.style.cursor = 'pointer';
+    close.style.alignSelf = 'flex-end';
+    close.style.fontSize = '16px';
+    close.onclick = function(){ box.remove(); };
+
+    var boxTitle = document.createElement('div');
+    boxTitle.innerText = 'Inferencia SEO de keyword';
+    boxTitle.style.fontWeight = 'bold';
+    boxTitle.style.fontSize = '14px';
+
+    var ta = document.createElement('textarea');
+    ta.value = details.join('\n');
+    ta.style.width = '100%';
+    ta.style.flex = '1';
+    ta.style.background = '#000';
+    ta.style.color = '#0f0';
+    ta.style.border = '1px solid #333';
+    ta.style.padding = '10px';
+    ta.style.resize = 'none';
+    ta.style.boxSizing = 'border-box';
+    ta.style.whiteSpace = 'pre-wrap';
+
+    box.appendChild(close);
+    box.appendChild(boxTitle);
+    box.appendChild(ta);
+    document.body.appendChild(box);
+
+  } catch(e) {
+    alert('Error al analizar la página: ' + e.message);
+  }
+})();
