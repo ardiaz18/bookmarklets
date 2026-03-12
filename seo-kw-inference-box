@@ -95,64 +95,108 @@ javascript:(function(){
     }
 
 function getVisibleBreadcrumbs(){
-  var selectors = [
-    '[aria-label*="breadcrumb" i]',
-    '[aria-label*="miga" i]',
-    '[class*="breadcrumb" i]',
-    '[class*="breadcrumbs" i]',
-    '[class*="miga" i]',
-    '[id*="breadcrumb" i]',
-    '[id*="breadcrumbs" i]',
-    '[id*="miga" i]',
-    '[itemtype*="BreadcrumbList" i]',
-    '[typeof*="BreadcrumbList" i]',
-    '[data-breadcrumb]',
-    '.breadcrumbs',
-    '.breadcrumb',
-    '.yoast-breadcrumb',
-    'nav[aria-label*="breadcrumb" i]',
-    'nav[aria-label*="miga" i]'
-  ];
-
   var items = [];
   var seen = new Set();
+
+  function isVisible(el){
+    if(!el) return false;
+    var style = window.getComputedStyle(el);
+    if(
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.opacity === '0'
+    ) return false;
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  }
+
+  function cleanText(el){
+    if(!el || !isVisible(el)) return '';
+    return normalizeText(el.innerText || el.textContent || '');
+  }
 
   function addText(txt){
     txt = normalizeText(txt);
     if(!txt) return;
-    if(txt.length > 350) return;
+    if(txt.length < 4 || txt.length > 250) return;
     if(seen.has(txt)) return;
     seen.add(txt);
     items.push(txt);
   }
 
-  selectors.forEach(function(sel){
-    document.querySelectorAll(sel).forEach(function(node){
-      addText(node.innerText || node.textContent || '');
-    });
+  function addNode(el){
+    var txt = cleanText(el);
+    if(!txt) return;
+    addText(txt);
+  }
+
+  function addClosestContainerText(el){
+    if(!el) return;
+    var container = el.closest(
+      '[aria-label*="breadcrumb" i], [aria-label*="miga" i], ' +
+      '[class*="breadcrumb" i], [class*="miga" i], ' +
+      '[id*="breadcrumb" i], [id*="miga" i], ' +
+      '[itemtype*="BreadcrumbList" i], [typeof*="BreadcrumbList" i], ' +
+      'nav, ol, ul'
+    );
+    if(container) addNode(container);
+  }
+
+  // 1) Casos semánticos claros
+  document.querySelectorAll(
+    '[aria-label*="breadcrumb" i], ' +
+    '[aria-label*="miga" i], ' +
+    '[class*="breadcrumb" i], ' +
+    '[class*="breadcrumbs" i], ' +
+    '[class*="miga" i], ' +
+    '[id*="breadcrumb" i], ' +
+    '[id*="breadcrumbs" i], ' +
+    '[id*="miga" i], ' +
+    '[itemtype*="BreadcrumbList" i], ' +
+    '[typeof*="BreadcrumbList" i], ' +
+    '[data-breadcrumb], ' +
+    '.breadcrumb, .breadcrumbs, .yoast-breadcrumb'
+  ).forEach(function(el){
+    addNode(el);
   });
 
-  document.querySelectorAll('nav, ol, ul, div').forEach(function(node){
-    var txt = normalizeText(node.innerText || node.textContent || '');
-    if(!txt || txt.length > 350) return;
+  // 2) Microdatos / structured markup visibles
+  document.querySelectorAll(
+    '[itemprop="breadcrumb"], ' +
+    '[itemprop="itemListElement"], ' +
+    '[itemprop="name"]'
+  ).forEach(function(el){
+    addClosestContainerText(el);
+  });
 
-    var links = node.querySelectorAll('a').length;
-    var itemsCount = node.querySelectorAll('li,[itemprop="itemListElement"]').length;
+  // 3) Fallback controlado: nav/ol/ul pequeños con varios enlaces jerárquicos
+  document.querySelectorAll('nav, ol, ul').forEach(function(el){
+    if(!isVisible(el)) return;
+
+    var txt = cleanText(el);
+    if(!txt) return;
+    if(txt.length > 250) return;
+
+    var links = el.querySelectorAll('a').length;
+    var lis = el.querySelectorAll('li').length;
+
     var attrs = (
-      (node.getAttribute('class') || '') + ' ' +
-      (node.getAttribute('id') || '') + ' ' +
-      (node.getAttribute('aria-label') || '') + ' ' +
-      (node.getAttribute('itemtype') || '') + ' ' +
-      (node.getAttribute('typeof') || '') + ' ' +
-      (node.getAttribute('data-breadcrumb') || '')
+      (el.getAttribute('class') || '') + ' ' +
+      (el.getAttribute('id') || '') + ' ' +
+      (el.getAttribute('aria-label') || '') + ' ' +
+      (el.getAttribute('itemtype') || '') + ' ' +
+      (el.getAttribute('typeof') || '')
     ).toLowerCase();
 
-    var isBreadcrumbByAttrs = /breadcrumb|breadcrumbs|miga/.test(attrs);
-    var isBreadcrumbByStructure =
-      itemsCount >= 2 ||
-      (links >= 2 && /›|»|\/|>|→|\|/.test(node.innerText || ''));
+    var hasSemanticHint = /breadcrumb|breadcrumbs|miga/.test(attrs);
+    var hasStructuredHint =
+      el.querySelector('[itemprop="itemListElement"], [itemprop="breadcrumb"]');
+    var hasSeparator = /›|»|\/|>/.test(el.innerText || '');
 
-    if(isBreadcrumbByAttrs || isBreadcrumbByStructure){
+    if(
+      hasSemanticHint ||
+      hasStructuredHint ||
+      ((links >= 2 || lis >= 2) && hasSeparator)
+    ){
       addText(txt);
     }
   });
