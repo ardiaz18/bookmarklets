@@ -94,56 +94,71 @@ javascript:(function(){
       }
     }
 
-    function getVisibleBreadcrumbs(){
-      var selectors = [
-        '[aria-label*="breadcrumb" i]',
-        '[aria-label*="miga" i]',
-        '[class*="breadcrumb" i]',
-        '[class*="breadcrumbs" i]',
-        '[class*="miga" i]',
-        '[id*="breadcrumb" i]',
-        '[id*="miga" i]',
-        '[itemtype*="BreadcrumbList" i]',
-        '[typeof*="BreadcrumbList" i]',
-        '[data-breadcrumb]',
-        'nav',
-        'ol',
-        'ul'
-      ];
+function getVisibleBreadcrumbs(){
+  var selectors = [
+    '[aria-label*="breadcrumb" i]',
+    '[aria-label*="miga" i]',
+    '[class*="breadcrumb" i]',
+    '[class*="breadcrumbs" i]',
+    '[class*="miga" i]',
+    '[id*="breadcrumb" i]',
+    '[id*="breadcrumbs" i]',
+    '[id*="miga" i]',
+    '[itemtype*="BreadcrumbList" i]',
+    '[typeof*="BreadcrumbList" i]',
+    '[data-breadcrumb]',
+    '.breadcrumbs',
+    '.breadcrumb',
+    '.yoast-breadcrumb',
+    'nav[aria-label*="breadcrumb" i]',
+    'nav[aria-label*="miga" i]'
+  ];
 
-      var items = [];
-      var seen = new Set();
+  var items = [];
+  var seen = new Set();
 
-      selectors.forEach(function(sel){
-        document.querySelectorAll(sel).forEach(function(node){
-          var txt = normalizeText(node.innerText || node.textContent || '');
-          if(!txt || txt.length > 300) return;
+  function addText(txt){
+    txt = normalizeText(txt);
+    if(!txt) return;
+    if(txt.length > 350) return;
+    if(seen.has(txt)) return;
+    seen.add(txt);
+    items.push(txt);
+  }
 
-          var attrs = (
-            (node.getAttribute('class') || '') + ' ' +
-            (node.getAttribute('id') || '') + ' ' +
-            (node.getAttribute('aria-label') || '') + ' ' +
-            (node.getAttribute('itemtype') || '') + ' ' +
-            (node.getAttribute('typeof') || '') + ' ' +
-            (node.getAttribute('data-breadcrumb') || '')
-          ).toLowerCase();
+  selectors.forEach(function(sel){
+    document.querySelectorAll(sel).forEach(function(node){
+      addText(node.innerText || node.textContent || '');
+    });
+  });
 
-          var looksLikeBreadcrumb =
-            /breadcrumb|breadcrumbs|miga/.test(attrs) ||
-            (
-              node.querySelectorAll('a').length >= 2 &&
-              /›|»|\/|>/.test(node.innerText)
-            );
+  document.querySelectorAll('nav, ol, ul, div').forEach(function(node){
+    var txt = normalizeText(node.innerText || node.textContent || '');
+    if(!txt || txt.length > 350) return;
 
-          if(looksLikeBreadcrumb && !seen.has(txt)){
-            seen.add(txt);
-            items.push(txt);
-          }
-        });
-      });
+    var links = node.querySelectorAll('a').length;
+    var itemsCount = node.querySelectorAll('li,[itemprop="itemListElement"]').length;
+    var attrs = (
+      (node.getAttribute('class') || '') + ' ' +
+      (node.getAttribute('id') || '') + ' ' +
+      (node.getAttribute('aria-label') || '') + ' ' +
+      (node.getAttribute('itemtype') || '') + ' ' +
+      (node.getAttribute('typeof') || '') + ' ' +
+      (node.getAttribute('data-breadcrumb') || '')
+    ).toLowerCase();
 
-      return items;
+    var isBreadcrumbByAttrs = /breadcrumb|breadcrumbs|miga/.test(attrs);
+    var isBreadcrumbByStructure =
+      itemsCount >= 2 ||
+      (links >= 2 && /›|»|\/|>|→|\|/.test(node.innerText || ''));
+
+    if(isBreadcrumbByAttrs || isBreadcrumbByStructure){
+      addText(txt);
     }
+  });
+
+  return items;
+}
 
     function getSchemaTexts(){
       var out = [];
