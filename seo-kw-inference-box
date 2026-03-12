@@ -101,17 +101,12 @@ function getVisibleBreadcrumbs(){
   function isVisible(el){
     if(!el) return false;
     var style = window.getComputedStyle(el);
-    if(
+    if (
       style.display === 'none' ||
       style.visibility === 'hidden' ||
       style.opacity === '0'
     ) return false;
     return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
-  }
-
-  function cleanText(el){
-    if(!el || !isVisible(el)) return '';
-    return normalizeText(el.innerText || el.textContent || '');
   }
 
   function addText(txt){
@@ -123,82 +118,39 @@ function getVisibleBreadcrumbs(){
     items.push(txt);
   }
 
-  function addNode(el){
-    var txt = cleanText(el);
-    if(!txt) return;
-    addText(txt);
-  }
+  var selectors = [
+    '[aria-label*="breadcrumb"]',
+    '[aria-label*="miga"]',
+    '[class*="breadcrumb"]',
+    '[class*="breadcrumbs"]',
+    '[class*="miga"]',
+    '[id*="breadcrumb"]',
+    '[id*="breadcrumbs"]',
+    '[id*="miga"]',
+    '[itemtype*="BreadcrumbList"]',
+    '[typeof*="BreadcrumbList"]',
+    '[data-breadcrumb]',
+    '.breadcrumb',
+    '.breadcrumbs',
+    '.yoast-breadcrumb'
+  ];
 
-  function addClosestContainerText(el){
-    if(!el) return;
-    var container = el.closest(
-      '[aria-label*="breadcrumb" i], [aria-label*="miga" i], ' +
-      '[class*="breadcrumb" i], [class*="miga" i], ' +
-      '[id*="breadcrumb" i], [id*="miga" i], ' +
-      '[itemtype*="BreadcrumbList" i], [typeof*="BreadcrumbList" i], ' +
-      'nav, ol, ul'
-    );
-    if(container) addNode(container);
-  }
-
-  // 1) Casos semánticos claros
-  document.querySelectorAll(
-    '[aria-label*="breadcrumb" i], ' +
-    '[aria-label*="miga" i], ' +
-    '[class*="breadcrumb" i], ' +
-    '[class*="breadcrumbs" i], ' +
-    '[class*="miga" i], ' +
-    '[id*="breadcrumb" i], ' +
-    '[id*="breadcrumbs" i], ' +
-    '[id*="miga" i], ' +
-    '[itemtype*="BreadcrumbList" i], ' +
-    '[typeof*="BreadcrumbList" i], ' +
-    '[data-breadcrumb], ' +
-    '.breadcrumb, .breadcrumbs, .yoast-breadcrumb'
-  ).forEach(function(el){
-    addNode(el);
+  selectors.forEach(function(sel){
+    try {
+      document.querySelectorAll(sel).forEach(function(el){
+        if(!isVisible(el)) return;
+        addText(el.innerText || el.textContent || '');
+      });
+    } catch(e){}
   });
 
-  // 2) Microdatos / structured markup visibles
-  document.querySelectorAll(
-    '[itemprop="breadcrumb"], ' +
-    '[itemprop="itemListElement"], ' +
-    '[itemprop="name"]'
-  ).forEach(function(el){
-    addClosestContainerText(el);
-  });
-
-  // 3) Fallback controlado: nav/ol/ul pequeños con varios enlaces jerárquicos
-  document.querySelectorAll('nav, ol, ul').forEach(function(el){
-    if(!isVisible(el)) return;
-
-    var txt = cleanText(el);
-    if(!txt) return;
-    if(txt.length > 250) return;
-
-    var links = el.querySelectorAll('a').length;
-    var lis = el.querySelectorAll('li').length;
-
-    var attrs = (
-      (el.getAttribute('class') || '') + ' ' +
-      (el.getAttribute('id') || '') + ' ' +
-      (el.getAttribute('aria-label') || '') + ' ' +
-      (el.getAttribute('itemtype') || '') + ' ' +
-      (el.getAttribute('typeof') || '')
-    ).toLowerCase();
-
-    var hasSemanticHint = /breadcrumb|breadcrumbs|miga/.test(attrs);
-    var hasStructuredHint =
-      el.querySelector('[itemprop="itemListElement"], [itemprop="breadcrumb"]');
-    var hasSeparator = /›|»|\/|>/.test(el.innerText || '');
-
-    if(
-      hasSemanticHint ||
-      hasStructuredHint ||
-      ((links >= 2 || lis >= 2) && hasSeparator)
-    ){
-      addText(txt);
-    }
+  document.querySelectorAll('[itemprop="breadcrumb"], [itemprop="itemListElement"]').forEach(function(el){
+    try {
+      var container = el.closest('nav, ol, ul, [class*="breadcrumb"], [class*="miga"], [id*="breadcrumb"], [id*="miga"]');
+      if(container && isVisible(container)){
+        addText(container.innerText || container.textContent || '');
+      }
+    } catch(e){}
   });
 
   return items;
