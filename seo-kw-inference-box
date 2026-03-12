@@ -1,4 +1,3 @@
-// Cuenta y señala las veces que una kw aparece en un texto.
 javascript:(function(){
   try {
     function normalizeText(str){
@@ -98,20 +97,51 @@ javascript:(function(){
     function getVisibleBreadcrumbs(){
       var selectors = [
         '[aria-label*="breadcrumb" i]',
+        '[aria-label*="miga" i]',
         '[class*="breadcrumb" i]',
+        '[class*="breadcrumbs" i]',
+        '[class*="miga" i]',
         '[id*="breadcrumb" i]',
-        '.breadcrumbs',
-        '.yoast-breadcrumb',
-        'nav[aria-label*="miga" i]',
-        'nav[aria-label*="breadcrumb" i]'
+        '[id*="miga" i]',
+        '[itemtype*="BreadcrumbList" i]',
+        '[typeof*="BreadcrumbList" i]',
+        '[data-breadcrumb]',
+        'nav',
+        'ol',
+        'ul'
       ];
+
       var items = [];
+      var seen = new Set();
+
       selectors.forEach(function(sel){
         document.querySelectorAll(sel).forEach(function(node){
           var txt = normalizeText(node.innerText || node.textContent || '');
-          if(txt && txt.length < 300) items.push(txt);
+          if(!txt || txt.length > 300) return;
+
+          var attrs = (
+            (node.getAttribute('class') || '') + ' ' +
+            (node.getAttribute('id') || '') + ' ' +
+            (node.getAttribute('aria-label') || '') + ' ' +
+            (node.getAttribute('itemtype') || '') + ' ' +
+            (node.getAttribute('typeof') || '') + ' ' +
+            (node.getAttribute('data-breadcrumb') || '')
+          ).toLowerCase();
+
+          var looksLikeBreadcrumb =
+            /breadcrumb|breadcrumbs|miga/.test(attrs) ||
+            (
+              node.querySelectorAll('a').length >= 2 &&
+              /›|»|\/|>/.test(node.innerText)
+            );
+
+          if(looksLikeBreadcrumb && !seen.has(txt)){
+            seen.add(txt);
+            items.push(txt);
+          }
         });
       });
+
       return items;
     }
 
@@ -316,6 +346,15 @@ javascript:(function(){
     boxTitle.style.fontWeight = 'bold';
     boxTitle.style.fontSize = '14px';
 
+    var more = document.createElement('a');
+    more.innerText = 'Ver más bookmarklets';
+    more.href = 'https://github.com/ardiaz18/bookmarklets/';
+    more.target = '_blank';
+    more.style.color = '#7dd3fc';
+    more.style.textDecoration = 'none';
+    more.style.fontSize = '12px';
+    more.style.marginBottom = '4px';
+
     var ta = document.createElement('textarea');
     ta.value = details.join('\n');
     ta.style.width = '100%';
@@ -330,6 +369,7 @@ javascript:(function(){
 
     box.appendChild(close);
     box.appendChild(boxTitle);
+    box.appendChild(more);
     box.appendChild(ta);
     document.body.appendChild(box);
 
