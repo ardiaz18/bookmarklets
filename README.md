@@ -16,4 +16,5 @@ Para cualquier bookmarklet: abre la carpeta correspondiente, copia el contenido 
 | [schema-checker-carlos-ortega](schema-checker-carlos-ortega/) | Extrae, visualiza y valida Schema JSON-LD con enlaces a validadores y documentación | Carlos Ortega |
 | [search-scraping](search-scraping/) | Scraper de la primera página de Google con detección de AI Overview y export TSV | — |
 | [seo-kw-inference-box](seo-kw-inference-box/) | Infiere keywords relevantes a partir del contenido visible de la página | — |
+| [goto-recover](goto-recover/) | Resuelve las URLs reales detrás de los enlaces /goto?url= de Google Search | Natzir Turrado |
 | [gsc-full-render](gsc-full-render/) | Reconstruye la página completa desde el HTML renderizado por Google en URL Inspection de GSC | Natzir Turrado |
