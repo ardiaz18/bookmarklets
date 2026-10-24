@@ -28,7 +28,7 @@ Con sesión iniciada también lee conversaciones ya existentes (`/c/…`). Sin s
 
 ## Nota
 
-Lee las respuestas de las peticiones `conversation` de la propia web de ChatGPT. Si OpenAI cambia el formato del JSON, puede necesitar ajustes.
+Lee las respuestas de la propia web de ChatGPT (fetch, XHR y WebSocket), también sin sesión (`/unauth-mweb/`). Si OpenAI cambia el formato del JSON, puede necesitar ajustes.
 
 ## Instalación
 
